@@ -15,5 +15,8 @@ Currently only active object and only on transforms
 
 **Breakdown** : `Shift + E`
 
+`Ctrl` to round percentage value.  
+`Shift` to step value by 5.  
+or type values directly.
 
-This Breakdowner standalone script is extracted from [GP toolbox addon](https://gitlab.com/autour-de-minuit/blender/gp_toolbox)
+> Note: This Breakdowner standalone script is extracted from [GP toolbox addon](https://gitlab.com/autour-de-minuit/blender/gp_toolbox)
