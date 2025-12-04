@@ -2,7 +2,7 @@ bl_info = {
     "name": "Breakdowner",
     "description": "Breakdown in object mode",
     "author": "Samuel Bernou",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (2, 93, 0),
     "location": "View3D",
     "doc_url": "https://github.com/Pullusb/breakdowner",
@@ -11,18 +11,26 @@ bl_info = {
 
 import bpy
 import re
-from mathutils import Vector, Matrix
-from math import radians, degrees
 
 # extracted from GP toolbox Breakdowner object mode V1
 # exemple for future improve: https://justinsbarrett.com/tweenmachine/
+
+def get_object_fcurves(obj):
+    '''return f-curves of object's active action'''
+    if bpy.app.version >= (5, 0, 0):
+        # action slot
+        if obj.animation_data and obj.animation_data.action_slot:
+            active_slot = obj.animation_data.action_slot
+            return active_slot.id_data.layers[0].strips[0].channelbag(active_slot).fcurves
+    else:
+        if obj.animation_data and obj.animation_data.action:
+            return obj.animation_data.action.fcurves
+    return []
 
 def get_surrounding_points(fc, frame):
     '''Take an Fcurve and a frame and return previous and next frames'''
     if not frame: frame = bpy.context.scene.frame_current
     p_pt = n_pt = None
-    mins = []
-    maxs = []
     for pt in fc.keyframe_points:
         if pt.co[0] < frame:
             p_pt = pt
@@ -32,7 +40,7 @@ def get_surrounding_points(fc, frame):
     
     return p_pt, n_pt
 
-## unused direct breackdown func
+## Unused direct breakdown func
 def breakdown_keys(percentage=50, channels=('location', 'rotation_euler', 'scale'), axe=(0,1,2)):
     cf = bpy.context.scene.frame_current# use operator context (may be unsynced timeline)
     axes_name = ('x', 'y', 'z')
@@ -185,19 +193,17 @@ class OBJECT_OT_breakdown_anim(bpy.types.Operator):
         if refresh:
             self.assign_transforms(percentage)
 
-
         # Valid
         if event.type in {'RET', 'SPACE', 'LEFTMOUSE'}:
-                ## 'INSERTKEY_AVAILABLE' ?  ? filter
             context.area.header_text_set(None)
             context.window.cursor_set("DEFAULT")
             
-            if context.scene.tool_settings.use_keyframe_insert_auto:# auto key OK
+            if context.scene.tool_settings.use_keyframe_insert_auto:
+                # auto key OK
                 if context.scene.tool_settings.use_keyframe_insert_keyingset and context.scene.keying_sets_all.active:
-                    bpy.ops.anim.keyframe_insert('INVOKE_DEFAULT')#type='DEFAULT'
+                    bpy.ops.anim.keyframe_insert('INVOKE_DEFAULT')
                 else:
                     bpy.ops.anim.keyframe_insert('INVOKE_DEFAULT', type='Available')
-                    # "DEFAULT" not found in ('Available', 'Location', 'Rotation', 'Scaling', 'BUILTIN_KSI_LocRot', 'LocRotScale', 'BUILTIN_KSI_LocScale', 'BUILTIN_KSI_RotScale', 'BUILTIN_KSI_DeltaLocation', 'BUILTIN_KSI_DeltaRotation', 'BUILTIN_KSI_DeltaScale', 'BUILTIN_KSI_VisualLoc', 'BUILTIN_KSI_VisualRot', 'BUILTIN_KSI_VisualScaling', 'BUILTIN_KSI_VisualLocRot', 'BUILTIN_KSI_VisualLocRotScale', 'BUILTIN_KSI_VisualLocScale', 'BUILTIN_KSI_VisualRotScale')
             return {'FINISHED'}
         
         # Abort
@@ -213,8 +219,6 @@ class OBJECT_OT_breakdown_anim(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def invoke(self, context, event):
-        ## cursors
-        ## 'DEFAULT', 'NONE', 'WAIT', 'CROSSHAIR', 'MOVE_X', 'MOVE_Y', 'KNIFE', 'TEXT', 'PAINT_BRUSH', 'PAINT_CROSS', 'DOT', 'ERASER', 'HAND', 'SCROLL_X', 'SCROLL_Y', 'SCROLL_XY', 'EYEDROPPER'
         ## start checks 
         if context.area.type != 'VIEW_3D':
             self.report({'WARNING'}, 'View3D not found, cannot run operator')
@@ -230,17 +234,14 @@ class OBJECT_OT_breakdown_anim(bpy.types.Operator):
             self.report({'WARNING'}, f'No animation data on obj: {obj.name}')
             return {'CANCELLED'}
         
-        action = anim_data.action
-        if not action:
+        fcurves = get_object_fcurves(obj)
+        if not fcurves:
             self.report({'WARNING'}, f'No action on animation data of obj: {obj.name}')
             return {'CANCELLED'}
 
         ## initiate variable to use
-        self.width = context.area.width# include sidebar...
-        ## with exclude sidebar >>> C.screen.areas[3].regions[5].width
-
+        self.width = context.area.width
         self.xmin = context.area.x
-
         self.xmouse = event.mouse_region_x
         self.pressed_alt = event.alt
         self.pressed_ctrl = event.ctrl
@@ -257,7 +258,7 @@ class OBJECT_OT_breakdown_anim(bpy.types.Operator):
 
         ## TODO for ob in context.selected objects, need to reduce list with upper filters...
 
-        for fc in action.fcurves:
+        for fc in fcurves:
             # if fc.data_path.split('"')[1] in bone_names_filter:# bones
             # if fc.data_path.split('.')[-1] in channels and fc.array_index in axe:# bones
             if fc.data_path in self.channels:# .split('.')[-1]# and fc.array_index in axe
